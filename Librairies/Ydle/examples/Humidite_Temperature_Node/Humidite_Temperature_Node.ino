@@ -57,8 +57,8 @@ void loop()
 			
 				/** Nous ajoutons nos valeurs que nous avons r�cup�r�es aupr�s du capteur	
 				 */
-				y.addData(&frame, YDLE_DATA_HUMIDITY, dht.humidity);
-				y.addData(&frame, YDLE_DATA_DEGREEC, dht.temperature);
+				y.addData(&frame, YDLE_DATA_HUMIDITY, (int)dht.humidity);
+				y.addData(&frame, YDLE_DATA_DEGREEC, (int)dht.temperature);
 				/** Nous proc�dons � l'envois de la trame.
 				 *
 				 */ 

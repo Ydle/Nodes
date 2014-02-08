@@ -86,7 +86,6 @@ static uint16_t rx_bits = 0;		// Les 16 derniers bits reçus, pour repérer l'oc
 volatile unsigned long t_start = 0; // Temps du premier sample de chaque bit
 static uint8_t rx_active = 0;		// Flag pour indiquer la bonne réception du message de start
 
-
 #define YDLE_SPEED 1000					// Le débit de transfert en bits/secondes
 #define YDLE_TPER 1000000/YDLE_SPEED	// La période d'un bit en microseconds
 #define YDLE_FBIT YDLE_TPER/8			// La fréquence de prise de samples
@@ -140,7 +139,7 @@ ydle::ydle(int rx, int tx, int button)
 	//pinMode(button, INPUT);
 	pinButton = button;
 	pinMode(pinLed, OUTPUT);
-	attachInterrupt(1, reset, RISING);
+	//attachInterrupt(1, reset, RISING);
 }
 
 // Initialisation des IO avec les valeurs par défaut
@@ -329,7 +328,7 @@ void ydle::handleReceivedFrame(Frame_t *frame)
 {
 	int litype;
 	long livalue;
-
+	Serial.println("I'm here");
 	//Special case for CMD_LINK
 	if(this->extractData(frame, 0,litype, livalue)==1)
 	{
@@ -391,7 +390,7 @@ void ydle::send(Frame_t *frame)
 	int i = 0,j = 0;
 
 	digitalWrite(pinLed, HIGH);   // on allume la Led pour indiquer une émission
-
+	digitalWrite(5, LOW);
 	// calcul crc
 	frame->taille++; // add crc BYTE
 	frame->crc = computeCrc(frame);
@@ -474,7 +473,7 @@ void ydle::send(Frame_t *frame)
 
 	digitalWrite(pinTx, LOW);
 	digitalWrite(pinLed, LOW);
-
+	digitalWrite(5, HIGH);
 	// Restart the timer task
 	Timer1.initialize(128);
 	Timer1.attachInterrupt(timerInterrupt);
@@ -801,6 +800,67 @@ int ydle::extractData(Frame_t *frame, int index, int &itype, long &ivalue)
 }
 
 
+union _FP16 ydle::floatToHalf(float number){
+	union _FP16 o = { 0 };
+	union _FP32 f;
+	f.f = number;
+	// Based on ISPC reference code (with minor modifications)
+	if (f.Exponent == 0) // Signed zero/denormal (which will underflow)
+	o.Exponent = 0;
+	else if (f.Exponent == 255) // Inf or NaN (all exponent bits set)
+	{
+		o.Exponent = 31;
+		o.Mantissa = f.Mantissa ? 0x200 : 0; // NaN->qNaN and Inf->Inf
+	}
+	else // Normalized number
+	{
+		// Exponent unbias the single, then bias the halfp
+		int newexp = f.Exponent - 127 + 15;
+		if (newexp >= 31) // Overflow, return signed infinity
+		o.Exponent = 31;
+		else if (newexp <= 0) // Underflow
+		{
+			if ((14 - newexp) <= 24) // Mantissa might be non-zero
+			{
+				uint16_t mant = f.Mantissa | 0x800000; // Hidden 1 bit
+				o.Mantissa = mant >> (14 - newexp);
+				if ((mant >> (13 - newexp)) & 1) // Check for rounding
+				o.u++; // Round, might overflow into exp bit, but this is OK
+			}
+		}
+		else
+		{
+			o.Exponent = newexp;
+			o.Mantissa = f.Mantissa >> 13;
+			if (f.Mantissa & 0x1000) // Check for rounding
+			o.u++; // Round, might overflow to inf, this is OK
+		}
+	}
+	            
+	o.Sign = f.Sign;
+	return o;
+}
+
+void ydle::addData(Frame_t *frame, float data){
+	union _FP16 h_data = this->floatToHalf(data);
+	int current_index = frame->taille;
+		
+	frame->data[current_index] = ((0xFF00) & h_data.u) >> 8;
+	++current_index;
+	frame->data[current_index] = ((0xFF) & h_data.u);
+	++current_index;
+	frame->taille = current_index;
+}
+
+void ydle::addData(Frame_t *frame, int data){
+	uint16_t data_o = (uint16_t) data;
+	int current_index = frame->taille;
+	frame->data[current_index] = ((0xFF00) & data) >> 8;
+	++current_index;
+	frame->data[current_index] = ((0xFF) & data);
+	++current_index;
+	frame->taille = current_index;
+}
 // ----------------------------------------------------------------------------
 /**
 	   Function: addData

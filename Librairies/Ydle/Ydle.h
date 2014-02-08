@@ -42,7 +42,7 @@
 ///     - Add callback function to handle user command
 ///     - Rename all #define to avoid confusion with other lib
 /// To use the Ydle library, you must have:
-///     #include <Ydle_lib.h>
+///     #include <Ydle.h>
 /// At the top of your sketch.
 ///
 
@@ -67,7 +67,7 @@
 
 #define YDLE_MAX_SIZE_FRAME 64
 // 1 sec timeout for ack
-#define YDLE_ACK_TIMEOUT 1000
+#define YDLE_ACK_TIMEOUT 250
 #define YDLE_TYPE_STATE 		1 // Node send data
 #define YDLE_TYPE_CMD  			2 // ON/OFF sortie etc...
 #define YDLE_TYPE_ACK  			3 // Acquit last command
@@ -86,6 +86,25 @@
 #define YDLE_CMD_ON    1 //Send a ON command to node data = Né output
 #define YDLE_CMD_OFF   2 //Send a OFF command to node data = Né output
 #define YDLE_CMD_RESET 3 //Ask a node to reset is configuration
+
+union _FP32 {
+	uint32_t u;
+	float f;
+	struct {
+		uint32_t Mantissa : 23;
+		uint32_t Exponent : 8;
+		uint32_t Sign : 1;
+	};
+};
+
+union _FP16 {
+	uint16_t u;
+	struct {
+		uint16_t Mantissa : 10;
+		uint16_t Exponent : 5;
+		uint16_t Sign : 1;
+	};
+};
 
 // Défini un type de structure Frame_t
 struct Frame_t
@@ -179,6 +198,10 @@ public:
 	void attach(ydleCallbackFunction function);
 	
 	static void resetNode();
+	
+	union _FP16 floatToHalf(float number);
+	void addData(Frame_t *frame, float data);
+	void addData(Frame_t *frame, int data);
 private:
 
 	// Fonctions de débogage
