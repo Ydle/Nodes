@@ -36,15 +36,5 @@ void setup()
 void loop()
 {
 	y.receive();
-	if(y.initialized()){
-		cur_time = millis();
-		if(cur_time - last_send >= DELAY_SEND){
-			last_send = cur_time;
-			Frame_t f;
-			y.dataToFrame(&f, 4);
-			y.addData(&f, YDLE_DATA_DEGREEC, i++);
-			y.send(&f);
-		}
-	}
 }
 

@@ -140,6 +140,8 @@ ydle::ydle(int rx, int tx, int button)
 	pinButton = button;
 	pinMode(pinLed, OUTPUT);
 	//attachInterrupt(1, reset, RISING);
+	pinMode(5, OUTPUT);
+	digitalWrite(5, HIGH);
 }
 
 // Initialisation des IO avec les valeurs par défaut
