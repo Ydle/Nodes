@@ -365,6 +365,14 @@ void ydle::handleReceivedFrame(Frame_t *frame)
 				writeEEProm();
 				m_initializedState = false;
 			}
+			
+			if(!m_initializedState)
+			{
+				m_Config.IdNode = frame->receptor;
+				m_Config.IdMaster = frame->sender;
+				m_initializedState = true;
+				writeEEProm();
+			}
 		}
 		
 		// send ACK if frame is for us.
