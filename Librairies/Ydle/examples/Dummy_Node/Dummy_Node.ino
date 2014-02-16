@@ -5,7 +5,7 @@
 
 #include <TimerOne.h>
 #include "Ydle.h"
-#define RX_PIN 2
+#define RX_PIN 12
 #define TX_PIN 10
 #define BT_PIN 3
 
