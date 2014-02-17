@@ -202,6 +202,8 @@ public:
 	union _FP16 floatToHalf(float number);
 	void addData(Frame_t *frame, float data);
 	void addData(Frame_t *frame, int data);
+	
+	void addData(Frame_t *frame, int type,float fdata);
 private:
 
 	// Fonctions de débogage
