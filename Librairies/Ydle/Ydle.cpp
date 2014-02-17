@@ -1017,4 +1017,102 @@ void ydle::printFrame(Frame_t *trame)
 		log("-----------------------------------------------");
 #endif
 }
+// ----------------------------------------------------------------------------
+/**
+	   Function: addData
+	   Inputs:  int type type of data
+				float data
 
+	   Outputs: 
+
+*/
+// ----------------------------------------------------------------------------
+void ydle::addData(Frame_t * frame, int type, float fdata)
+{
+	int oldindex = frame->taille;
+	int data;
+	switch (type){
+		// 4 bits no signed
+		case YDLE_DATA_STATE : 
+			
+			if (frame->taille < 29)
+			{
+				data=(int)fdata;
+				frame->taille++;
+				frame->data[oldindex]=type<<4;
+				frame->data[oldindex]+=data&0x0f;
+			}
+#ifdef _YDLE_DEBUG
+			else
+				log("invalid trame len in addData");
+#endif
+		break;	
+
+		// 12 bits signed
+		case YDLE_DATA_DEGREEC:
+		case YDLE_DATA_DEGREEF : 
+		case YDLE_DATA_PERCENT : 
+			if (frame->taille < 28)
+			{
+				data=(int)(fdata*20);
+				frame->taille += 2;
+				frame->data[oldindex]=type<<4;
+				if (data <0)
+				{
+					data=data *-1;
+					frame->data[oldindex]^=0x8;
+				}
+				frame->data[oldindex]+=(data>>8)&0x0f;
+				frame->data[oldindex+1]=data;
+			}
+#ifdef _YDLE_DEBUG
+			else
+				log("invalid trame len in addData");
+#endif
+		break;	
+
+		// 12 bits no signed
+		case YDLE_DATA_HUMIDITY: 
+		case YDLE_DATA_DISTANCE: 
+		case YDLE_DATA_PRESSION: 
+			switch(type)
+			{
+			case YDLE_DATA_HUMIDITY:
+				data=(int)(fdata*40);
+				break;
+			case YDLE_DATA_DISTANCE:
+			case YDLE_DATA_PRESSION:
+				data=(int)fdata;
+				break;
+			}
+			if (frame->taille < 28)
+			{
+				frame->taille += 2;
+				frame->data[oldindex]=type<<4;
+				frame->data[oldindex]+=(data>>8)&0x0f;
+				frame->data[oldindex+1]=data;
+			}
+#ifdef _YDLE_DEBUG
+			else
+				log("invalid trame len in addData");
+#endif
+		break;	
+
+		// 20 bits no signed
+		case YDLE_DATA_WATT  : 
+			data=(int)(fdata);
+			if (frame->taille<27)
+			{
+				frame->taille+=3;
+				frame->data[oldindex]=type<<4;
+				frame->data[oldindex]+=(data>>16)&0x0f;
+				frame->data[oldindex+1]=(data>>8)&0xff;
+				frame->data[oldindex+2]=data;
+			}
+#ifdef _YDLE_DEBUG
+			else
+				log("invalid trame len in addData");
+#endif // _YDLE_DEBUG
+		break;	
+	}
+}
