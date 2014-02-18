@@ -9,6 +9,7 @@
 // Manuel Esteban AKA Yaug
 // Matthieu Desgardin AKA Zescientist
 // Yargol AKA Yargol
+// Xylerk
 //
 // WebPage: http://www.ydle.fr/index.php
 // Contact: http://forum.ydle.fr/index.php
@@ -19,6 +20,8 @@
 #include <TimerOne.h>
 #include "Ydle.h"
 #include <avr/eeprom.h>
+
+
 
 
 const PROGMEM prog_uchar _atm_crc8_table[256] = {
@@ -755,7 +758,6 @@ int ydle::extractData(Frame_t *frame, int index, int &itype, long &ivalue)
 			case YDLE_DATA_DEGREEC:  
 			case YDLE_DATA_DEGREEF : 
 			case YDLE_DATA_PERCENT : 
-			case YDLE_DATA_HUMIDITY: 
 				if(*ptr&0x8)
 					bifValueisNegativ=true;
 				ivalue=*ptr&0x0F<<8;
@@ -769,7 +771,8 @@ int ydle::extractData(Frame_t *frame, int index, int &itype, long &ivalue)
 
 			// 12 bits no signed
 			case YDLE_DATA_DISTANCE: 
-			case YDLE_DATA_PRESSION: 
+			case YDLE_DATA_PRESSION:
+			case YDLE_DATA_HUMIDITY:
 				ivalue=(*ptr&0x0F)<<8;
 				ptr++;
 				ivalue+=*ptr;
@@ -863,25 +866,28 @@ void ydle::addData(Frame_t *frame, int data){
 	++current_index;
 	frame->taille = current_index;
 }
+
 // ----------------------------------------------------------------------------
 /**
 	   Function: addData
 	   Inputs:  int type type of data
-				long data
+				float data
 
 	   Outputs: 
 
 */
 // ----------------------------------------------------------------------------
-void ydle::addData(Frame_t * frame, int type, long data)
+void ydle::addData(Frame_t * frame, int type, float fdata)
 {
 	int oldindex = frame->taille;
-
+	int data;
 	switch (type){
 		// 4 bits no signed
-		case YDLE_DATA_STATE :    
+		case YDLE_DATA_STATE :
+
 			if (frame->taille < 29)
 			{
+				data=(int)fdata;
 				frame->taille++;
 				frame->data[oldindex]=type<<4;
 				frame->data[oldindex]+=data&0x0f;
@@ -893,12 +899,12 @@ void ydle::addData(Frame_t * frame, int type, long data)
 		break;	
 
 		// 12 bits signed
-		case YDLE_DATA_DEGREEC:  
+		case YDLE_DATA_DEGREEC:
 		case YDLE_DATA_DEGREEF : 
 		case YDLE_DATA_PERCENT : 
-		case YDLE_DATA_HUMIDITY: 
 			if (frame->taille < 28)
 			{
+				data=(int)(fdata*20);
 				frame->taille += 2;
 				frame->data[oldindex]=type<<4;
 				if (data <0)
@@ -916,8 +922,19 @@ void ydle::addData(Frame_t * frame, int type, long data)
 		break;	
 
 		// 12 bits no signed
+		case YDLE_DATA_HUMIDITY:
 		case YDLE_DATA_DISTANCE: 
 		case YDLE_DATA_PRESSION: 
+			switch(type)
+			{
+			case YDLE_DATA_HUMIDITY:
+				data=(int)(fdata*40);
+				break;
+			case YDLE_DATA_DISTANCE:
+			case YDLE_DATA_PRESSION:
+				data=(int)fdata;
+				break;
+			}
 			if (frame->taille < 28)
 			{
 				frame->taille += 2;
@@ -932,7 +949,8 @@ void ydle::addData(Frame_t * frame, int type, long data)
 		break;	
 
 		// 20 bits no signed
-		case YDLE_DATA_WATT  :   
+		case YDLE_DATA_WATT  :
+			data=(int)(fdata);
 			if (frame->taille<27)
 			{
 				frame->taille+=3;
@@ -948,7 +966,6 @@ void ydle::addData(Frame_t * frame, int type, long data)
 		break;	
 	}
 }
-
 // Affiche les logs sur la console série
 void ydle::log(String msg)
 {
@@ -1009,102 +1026,4 @@ void ydle::printFrame(Frame_t *trame)
 		log("-----------------------------------------------");
 #endif
 }
-// ----------------------------------------------------------------------------
-/**
-	   Function: addData
-	   Inputs:  int type type of data
-				float data
 
-	   Outputs: 
-
-*/
-// ----------------------------------------------------------------------------
-void ydle::addData(Frame_t * frame, int type, float fdata)
-{
-	int oldindex = frame->taille;
-	int data;
-	switch (type){
-		// 4 bits no signed
-		case YDLE_DATA_STATE : 
-			
-			if (frame->taille < 29)
-			{
-				data=(int)fdata;
-				frame->taille++;
-				frame->data[oldindex]=type<<4;
-				frame->data[oldindex]+=data&0x0f;
-			}
-#ifdef _YDLE_DEBUG
-			else
-				log("invalid trame len in addData");
-#endif
-		break;	
-
-		// 12 bits signed
-		case YDLE_DATA_DEGREEC:
-		case YDLE_DATA_DEGREEF : 
-		case YDLE_DATA_PERCENT : 
-			if (frame->taille < 28)
-			{
-				data=(int)(fdata*20);
-				frame->taille += 2;
-				frame->data[oldindex]=type<<4;
-				if (data <0)
-				{
-					data=data *-1;
-					frame->data[oldindex]^=0x8;
-				}
-				frame->data[oldindex]+=(data>>8)&0x0f;
-				frame->data[oldindex+1]=data;
-			}
-#ifdef _YDLE_DEBUG
-			else
-				log("invalid trame len in addData");
-#endif
-		break;	
-
-		// 12 bits no signed
-		case YDLE_DATA_HUMIDITY: 
-		case YDLE_DATA_DISTANCE: 
-		case YDLE_DATA_PRESSION: 
-			switch(type)
-			{
-			case YDLE_DATA_HUMIDITY:
-				data=(int)(fdata*40);
-				break;
-			case YDLE_DATA_DISTANCE:
-			case YDLE_DATA_PRESSION:
-				data=(int)fdata;
-				break;
-			}
-			if (frame->taille < 28)
-			{
-				frame->taille += 2;
-				frame->data[oldindex]=type<<4;
-				frame->data[oldindex]+=(data>>8)&0x0f;
-				frame->data[oldindex+1]=data;
-			}
-#ifdef _YDLE_DEBUG
-			else
-				log("invalid trame len in addData");
-#endif
-		break;	
-
-		// 20 bits no signed
-		case YDLE_DATA_WATT  : 
-			data=(int)(fdata);
-			if (frame->taille<27)
-			{
-				frame->taille+=3;
-				frame->data[oldindex]=type<<4;
-				frame->data[oldindex]+=(data>>16)&0x0f;
-				frame->data[oldindex+1]=(data>>8)&0xff;
-				frame->data[oldindex+2]=data;
-			}
-#ifdef _YDLE_DEBUG
-			else
-				log("invalid trame len in addData");
-#endif // _YDLE_DEBUG
-		break;	
-	}
-}

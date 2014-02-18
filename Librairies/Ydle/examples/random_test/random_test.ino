@@ -1,5 +1,5 @@
 /* Author : Xylerk
-* Description : Test envoi valeur aléatoire
+* Description : Envoi d'une trame contenant une température et une humidité générées aléatoirement
 * Licence : CC-BY-SA
 */
 
@@ -12,21 +12,32 @@
 // Init de la node, 
 ydle y(RX_PIN, TX_PIN, BT_PIN);
 
-float test=50;
 void setup()
 {
 	y.init_timer();
         Serial.begin(115200);
-	// Insérer votre code d'init après
-		
+	Serial.println("Envoi température et humidité dans une seule trame");    		
 }
 
 void loop()
 {
-	Frame_t frame;
+	// Génération température alétoire et affichage moniteur série
+        float temperature=(random(100)+.01*random(100))*(-1)*pow(2,random(2));
+        Serial.print("Température : ");
+        Serial.println(temperature);
+        // Génération humidité alétoire et affichage moniteur série
+        float humidity=random(100)+.01*random(100);
+        Serial.print("Humidité : ");
+        Serial.println(humidity);
+        // Construction trame
+        Frame_t frame;
+        //Déclaration type de trame
         y.dataToFrame(&frame, YDLE_TYPE_STATE);
-        test=(random(100)+.1*random(10))*(-1)*pow(2,random(2));
-        y.addData(&frame, YDLE_DATA_DEGREEC, test);
+        //Ajout température
+        y.addData(&frame, YDLE_DATA_DEGREEC, temperature);
+        //Ajout humidité
+        y.addData(&frame, YDLE_DATA_HUMIDITY, humidity);
+        //envoi de la trame
         y.send(&frame);
-        delay(1000);
+        delay(5000);
 }
