@@ -1,4 +1,5 @@
 /* Author : Fabrice Scheider AKA Denia
+* Modified by Xylerk
 * Description : Node envoyant humidité et température en utilisant le protocole radio ydle.
 * Note : J'utilise dans cette librairie un DHT11, il est donc nécessaire que vous l'ayez dans 
 * votre répertoire librairies pour que le sketch compile.
@@ -57,19 +58,11 @@ void loop()
 				 */
 				y.dataToFrame(&frame, YDLE_TYPE_STATE_ACK);
 			
-				/** Nous ajoutons la valeur de l'humidité que nous avons récupérée auprès du capteur	
+				/** Nous ajoutons les valeurs que nous avons récupérées auprès du capteur	
 				 */
-				y.addData(&frame, YDLE_DATA_HUMIDITY, (int)dht.humidity);
-				/** Nous procédons à l'envois de la trame.
-				 *
-				 */ 
-				y.send(&frame);
+				y.addData(&frame, YDLE_DATA_DEGREEC, dht.temperature);
+				y.addData(&frame, YDLE_DATA_HUMIDITY, dht.humidity);
 				
-				// Nous créons une nouvelle frame pour la température
-				y.dataToFrame(&frame, YDLE_TYPE_STATE_ACK);
-				/** Nous ajoutons la valeur de la température que nous avons récupérée auprès du capteur	
-				 */
-				y.addData(&frame, YDLE_DATA_DEGREEC, (int)(10*dht.temperature);
 				/** Nous procédons à l'envois de la trame.
 				 *
 				 */ 
