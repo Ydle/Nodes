@@ -412,9 +412,9 @@ void ydle::send(Frame_t *frame)
 #endif
 	// From now, we are ready to transmit the frame
 
-	if(!rx_active){
+	while(rx_active){
 		// Wait that the current transmission finish
-		delay(250);
+		delay(2*YDLE_TPER);
 	}
 	// So, stop the interruption while sending
 	Timer1.stop();
