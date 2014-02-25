@@ -160,7 +160,7 @@ public:
 	void ReadConfig();
 	
 	// Envoie des verrous et des bits formant une trame
-	void send(Frame_t *frame);
+	uint8_t send(Frame_t *frame);
 	
 	// Ecoute le récepteur pour l'arrivée d'un signal
 	void listenSignal();
@@ -190,11 +190,11 @@ public:
 	bool isDone();
 	
 	// CRC calculation
-	unsigned char computeCrc(Frame_t *frame);
+	uint8_t computeCrc(Frame_t *frame);
 	// Launch the timer for the receive function
 	void init_timer();
 	// New function need to be called by the main function in order to handle the new received frame
-	void receive();
+	uint8_t  receive();
 	// Function to attach a user defined function for handle received frame
 	void attach(ydleCallbackFunction function);
 	
@@ -225,7 +225,7 @@ private:
 	void writeEEProm();
 	void readEEProm();
 
-	uint8_t crc8(const uint8_t* buf, uint8_t length);
+	uint8_t crc8(const uint8_t* buf, int length);
 };
 
 #endif
