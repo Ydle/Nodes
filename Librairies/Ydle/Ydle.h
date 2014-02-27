@@ -65,7 +65,7 @@
 #error Platform not defined
 #endif
 
-#define _YDLE_DEBUG
+//#define _YDLE_DEBUG
 
 #define YDLE_MAX_FRAME 2
 
@@ -190,7 +190,7 @@ public:
 	bool isDone();
 	
 	// CRC calculation
-	uint8_t computeCrc(Frame_t *frame);
+	unsigned char computeCrc(Frame_t *frame);
 	// Launch the timer for the receive function
 	void init_timer();
 	// New function need to be called by the main function in order to handle the new received frame
@@ -225,7 +225,9 @@ private:
 	void writeEEProm();
 	void readEEProm();
 
-	uint8_t crc8(const uint8_t* buf, int length);
+	uint8_t crc8(const uint8_t* buf, uint8_t length);
+
+
 };
 
 #endif

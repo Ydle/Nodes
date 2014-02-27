@@ -23,8 +23,7 @@
 
 
 
-
-const PROGMEM uint8_t _atm_crc8_table[256] = {
+const PROGMEM prog_uchar _atm_crc8_table[256] {
     0x00, 0x07, 0x0E, 0x09, 0x1C, 0x1B, 0x12, 0x15,
     0x38, 0x3F, 0x36, 0x31, 0x24, 0x23, 0x2A, 0x2D,
     0x70, 0x77, 0x7E, 0x79, 0x6C, 0x6B, 0x62, 0x65,
@@ -89,7 +88,7 @@ static uint16_t rx_bits = 0;		// Les 16 derniers bits reçus, pour repérer l'oc
 volatile unsigned long t_start = 0; // Temps du premier sample de chaque bit
 static uint8_t rx_active = 0;		// Flag pour indiquer la bonne réception du message de start
 
-#define YDLE_SPEED 2500
+#define YDLE_SPEED 1000
 // Le débit de transfert en bits/secondes
 #define YDLE_TPER 1000000/YDLE_SPEED	// La période d'un bit en microseconds
 #define YDLE_FBIT YDLE_TPER/8			// La fréquence de prise de samples
@@ -172,7 +171,7 @@ ydle::ydle()
 }
 
 void ydle::init_timer(){
-	Timer1.initialize(YDLE_FBIT); // set a timer of length 125 microseconds
+	Timer1.initialize(YDLE_FBIT); // set a timer of length YDLE_FBIT microseconds
 	Timer1.attachInterrupt( timerInterrupt ); // attach the service routine here
 
 }
@@ -211,7 +210,7 @@ void timerInterrupt(){
 			transmission_on=false;
 			digitalWrite(pinTx, LOW);
 			digitalWrite(pinLed, LOW);
-			digitalWrite(5, HICH);
+			digitalWrite(5, HIGH);
 		}
 	}
 }
@@ -259,24 +258,24 @@ void ydle::writeEEProm()
 	#endif
 }
 
-uint8_t ydle::crc8(const uint8_t* buf, int length) {
-	// The inital and final constants as used in the ATM HEC.
+uint8_t ydle::crc8(const uint8_t* buf, uint8_t length) {
+// The inital and final constants as used in the ATM HEC.
 	const uint8_t initial = 0x00;
 	const uint8_t final = 0x55;
 	uint8_t crc = initial;
 	while (length) {
-		crc =  _atm_crc8_table[(*buf ^ crc)];
-		buf++;
-		length--;
+			crc = pgm_read_byte_near(_atm_crc8_table + (*buf ^ crc));
+				buf++;
+				length--;
 	}
 	return crc ^ final;
 }
 
-uint8_t ydle::computeCrc(Frame_t* frame){
-	uint8_t *buf, crc;
+unsigned char ydle::computeCrc(Frame_t* frame){
+	unsigned char *buf, crc;
 	int a,j;
 
-	buf = (uint8_t*)malloc(frame->taille+3);
+	buf = (unsigned char*)malloc(frame->taille+3);
 	memset(buf, 0x0, frame->taille+3);
 
 	buf[0] = frame->sender;
@@ -288,6 +287,7 @@ uint8_t ydle::computeCrc(Frame_t* frame){
 	for(a=3, j=0 ;j < frame->taille - 1;a++, j++){
 		buf[a] = frame->data[j];
 	}
+
 	crc = crc8(buf,frame->taille+2);
 	free(buf);
 	return crc;
@@ -434,11 +434,7 @@ uint8_t ydle::send(Frame_t *frame)
 	int i = 0,j = 0;
 
 	digitalWrite(pinLed, HIGH);   // on allume la Led pour indiquer une émission
-	digitalWrite(5, LOW);
-	// calcul crc
-	frame->taille++; // add crc BYTE
-	frame->crc = computeCrc(frame);
-	uint8_t ccc = frame->crc;
+
 	if(frame->type == YDLE_TYPE_STATE_ACK){
 		if(wait_ack != 1){
 			memcpy(&g_sendFrameBuffer, &frame, sizeof(Frame_t));
@@ -454,9 +450,18 @@ uint8_t ydle::send(Frame_t *frame)
 	while(rx_active){
 		// Wait that the current transmission finish
 		delay(2*YDLE_TPER);
+#ifdef _YDLE_DEBUG
+		Serial.println("The ligne is occuped");
+#endif
 	}
+	memset((void*)&frameToSend, 0x0, 40);
+	// add crc BYTE
+	frame->taille++;
+	// calcul crc
+	frame->crc = computeCrc(frame);
 
 	uint8_t index =0;
+
 	frameToSendLength =7+frame->taille;
 	frameToSend[index++] = 0xFF;
 	frameToSend[index++] = 0xFF;
@@ -474,8 +479,9 @@ uint8_t ydle::send(Frame_t *frame)
 
 	tx_index = 0;
 	tx_bit = 7;
-	transmission_on = true;
 
+	digitalWrite(5, LOW);
+	transmission_on = true;
 }
 
 // Comparaison du signal reçu et du signal de référence
@@ -590,7 +596,7 @@ void pll()
 					parite = 0;
 					taille = 0;
 					memset(m_data,0,sizeof(m_data));
-					t_start = micros();
+					//t_start = micros();
 					return;
 				}
 			}
