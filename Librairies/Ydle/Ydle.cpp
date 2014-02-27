@@ -264,9 +264,9 @@ uint8_t ydle::crc8(const uint8_t* buf, uint8_t length) {
 	const uint8_t final = 0x55;
 	uint8_t crc = initial;
 	while (length) {
-			crc = pgm_read_byte_near(_atm_crc8_table + (*buf ^ crc));
-				buf++;
-				length--;
+		crc = pgm_read_byte_near(_atm_crc8_table + (*buf ^ crc));
+		buf++;
+		length--;
 	}
 	return crc ^ final;
 }
