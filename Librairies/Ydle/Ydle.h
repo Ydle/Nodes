@@ -9,6 +9,7 @@
 // Manuel Esteban AKA Yaug
 // Matthieu Desgardin AKA Zescientist
 // Yargol AKA Yargol
+// Xylerk
 //
 // WebPage: http://www.ydle.fr/index.php
 // Contact: http://forum.ydle.fr/index.php
@@ -41,6 +42,9 @@
 /// 	- Using timer interrupt for call the pll function
 ///     - Add callback function to handle user command
 ///     - Rename all #define to avoid confusion with other lib
+///\version 0.5.2 2014-02-18
+///		- Autoconvert value for DATA_DEGREEC, DATA_DEGREEF and DATA_HUMIDITY
+///
 /// To use the Ydle library, you must have:
 ///     #include <Ydle.h>
 /// At the top of your sketch.
@@ -61,7 +65,7 @@
 #error Platform not defined
 #endif
 
-#define _YDLE_DEBUG
+//#define _YDLE_DEBUG
 
 #define YDLE_MAX_FRAME 2
 
@@ -74,8 +78,8 @@
 #define YDLE_TYPE_STATE_ACK 	4 // Node send data and want ACK
 
 #define YDLE_DATA_STATE     1 // On - OFF (4bits)
-#define YDLE_DATA_DEGREEC	2 // Degrée Celsius ** -204.7 é 204.7 (12bits)
-#define YDLE_DATA_DEGREEF	3 // Degrée Fahrenheit ** -204.7 é 204.7 (12bits)
+#define YDLE_DATA_DEGREEC	2 // Degrée Celsius ** -100.35 é 100.35 (12bits)
+#define YDLE_DATA_DEGREEF	3 // Degrée Fahrenheit ** -100.35 é 100.35 (12bits)
 #define YDLE_DATA_PERCENT	4 // Pourcentage ** -100% é 100% (12bits)
 #define YDLE_DATA_DISTANCE	5 // Distance en Cm ** 0 é 4095 (12 bits)
 #define YDLE_DATA_WATT		6 // Watt ** 0 à 1048575 (20bits)
@@ -156,7 +160,7 @@ public:
 	void ReadConfig();
 	
 	// Envoie des verrous et des bits formant une trame
-	void send(Frame_t *frame);
+	uint8_t send(Frame_t *frame);
 	
 	// Ecoute le récepteur pour l'arrivée d'un signal
 	void listenSignal();
@@ -166,9 +170,6 @@ public:
 	
 	// Crée une trame avec le type
 	void dataToFrame(Frame_t *frame, unsigned long type);
-
-	// add TYPE_ETAT data
-	void addData(Frame_t *frame, int type,long data);
 	
 	// extract any type of data from receivedsignal
 	int extractData(Frame_t *frame, int index, int &itype, long &ivalue);
@@ -193,7 +194,7 @@ public:
 	// Launch the timer for the receive function
 	void init_timer();
 	// New function need to be called by the main function in order to handle the new received frame
-	void receive();
+	uint8_t  receive();
 	// Function to attach a user defined function for handle received frame
 	void attach(ydleCallbackFunction function);
 	
@@ -202,6 +203,11 @@ public:
 	union _FP16 floatToHalf(float number);
 	void addData(Frame_t *frame, float data);
 	void addData(Frame_t *frame, int data);
+	
+	//
+	void addData(Frame_t *frame, int type,float fdata);
+
+
 private:
 
 	// Fonctions de débogage
@@ -220,6 +226,8 @@ private:
 	void readEEProm();
 
 	uint8_t crc8(const uint8_t* buf, uint8_t length);
+
+
 };
 
 #endif

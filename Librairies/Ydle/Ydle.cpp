@@ -9,6 +9,7 @@
 // Manuel Esteban AKA Yaug
 // Matthieu Desgardin AKA Zescientist
 // Yargol AKA Yargol
+// Xylerk
 //
 // WebPage: http://www.ydle.fr/index.php
 // Contact: http://forum.ydle.fr/index.php
@@ -19,6 +20,7 @@
 #include <TimerOne.h>
 #include "Ydle.h"
 #include <avr/eeprom.h>
+
 
 
 const PROGMEM prog_uchar _atm_crc8_table[256] = {
@@ -69,7 +71,7 @@ static uint8_t pinLed = 13;		// Le numéro de la broche IO utilisée pour la Led
 static uint8_t pinCop = 8;		// Permet la recopie du signal sur une sortie pour vérification à l'oscilloscope
 static uint8_t pinButton = 3;	// Le numéro de la broche IO utilisée pour l'installation du boutton de resettage
 
-static unsigned char start_bit2 = 0b01000010; // Octet de start
+static uint8_t start_bit2 = 0b01000010; // Octet de start
 
 volatile uint8_t sample_value = 0;		// Disponibilité d'un sample
 volatile uint8_t sample_count = 1;		// Nombre de samples sur la période en cours
@@ -86,7 +88,8 @@ static uint16_t rx_bits = 0;		// Les 16 derniers bits reçus, pour repérer l'oc
 volatile unsigned long t_start = 0; // Temps du premier sample de chaque bit
 static uint8_t rx_active = 0;		// Flag pour indiquer la bonne réception du message de start
 
-#define YDLE_SPEED 1000					// Le débit de transfert en bits/secondes
+#define YDLE_SPEED 1000
+// Le débit de transfert en bits/secondes
 #define YDLE_TPER 1000000/YDLE_SPEED	// La période d'un bit en microseconds
 #define YDLE_FBIT YDLE_TPER/8			// La fréquence de prise de samples
 
@@ -108,6 +111,13 @@ static uint8_t rx_done = 0; // Si le message est complet
 static uint8_t frameReadyToBeRead = false;
 static uint8_t pFrame = 0;
 volatile uint8_t transmission_on = false;
+
+static int tx_sample =0;
+static  int tx_bit =7;
+static  int tx_index =0;
+static  bool bit_test = false;
+volatile uint8_t frameToSend[40];
+volatile uint8_t frameToSendLength = 0;
 
 // Catch function for interrupt the reset button
 void reset(){
@@ -157,12 +167,13 @@ ydle::ydle()
 	pinMode(pinLed, OUTPUT);
 	// Permet la recopie du signal sur une sortie pour vérification é l'oscilloscope
 	//pinMode(pinCop, OUTPUT);
-	
+
 }
 
 void ydle::init_timer(){
-	Timer1.initialize(YDLE_FBIT); // set a timer of length 125 microseconds
+	Timer1.initialize(YDLE_FBIT); // set a timer of length YDLE_FBIT microseconds
 	Timer1.attachInterrupt( timerInterrupt ); // attach the service routine here
+
 }
 
 void timerInterrupt(){
@@ -173,6 +184,34 @@ void timerInterrupt(){
 		}
 		sample_value = digitalRead(pinRx);
 		pll();
+	}
+	if(transmission_on){
+		if(tx_sample == 0){
+		    if (bit_test ==0){
+		      digitalWrite(pinTx, frameToSend[tx_index]& 1<<tx_bit);
+		      bit_test = true;
+		    }
+		    else {
+		    	digitalWrite(pinTx, !(frameToSend[tx_index]& 1<<tx_bit));
+		    	bit_test = false;
+		    	tx_bit--;
+		    }
+
+		}
+		if (tx_bit < 0){
+			tx_index++;
+			tx_bit = 7;
+		}
+		tx_sample++;
+		if(tx_sample > 7){
+			tx_sample = 0 ;
+		}
+		if(tx_index > frameToSendLength && tx_sample == 0){
+			transmission_on=false;
+			digitalWrite(pinTx, LOW);
+			digitalWrite(pinLed, LOW);
+			digitalWrite(5, HIGH);
+		}
 	}
 }
 
@@ -220,7 +259,7 @@ void ydle::writeEEProm()
 }
 
 uint8_t ydle::crc8(const uint8_t* buf, uint8_t length) {
-	// The inital and final constants as used in the ATM HEC.
+// The inital and final constants as used in the ATM HEC.
 	const uint8_t initial = 0x00;
 	const uint8_t final = 0x55;
 	uint8_t crc = initial;
@@ -248,16 +287,17 @@ unsigned char ydle::computeCrc(Frame_t* frame){
 	for(a=3, j=0 ;j < frame->taille - 1;a++, j++){
 		buf[a] = frame->data[j];
 	}
+
 	crc = crc8(buf,frame->taille+2);
 	free(buf);
 	return crc;
 }
 
-void ydle::receive(){
+uint8_t  ydle::receive(){
 	unsigned char crc_p;
 	
 	if(frameReadyToBeRead){
-		for(unsigned char i = 0; i < pFrame; i++){
+		for(int i = 0; i < (int)pFrame; i++){
 			crc_p = computeCrc(&g_frameBuffer[i]);
 			if(crc_p != g_frameBuffer[i].crc)
 			{
@@ -285,6 +325,7 @@ void ydle::receive(){
 						wait_ack = 0;
 						retry = 0;
 						last_check = 0;
+						return 1;
 					}
 				}else{
 #ifdef _YDLE_DEBUG
@@ -317,6 +358,7 @@ void ydle::receive(){
 				wait_ack = 0;
 				retry = 0;
 				last_check = 0;
+				return 0;
 #ifdef _YDLE_DEBUG
 				Serial.println("Lost packet... sorry dude !");
 #endif
@@ -387,15 +429,11 @@ void ydle::handleReceivedFrame(Frame_t *frame)
 }
 
 // Synchronise l'AGC, envoie l'octet de start puis transmet la trame
-void ydle::send(Frame_t *frame)
+uint8_t ydle::send(Frame_t *frame)
 {
 	int i = 0,j = 0;
 
 	digitalWrite(pinLed, HIGH);   // on allume la Led pour indiquer une émission
-	digitalWrite(5, LOW);
-	// calcul crc
-	frame->taille++; // add crc BYTE
-	frame->crc = computeCrc(frame);
 
 	if(frame->type == YDLE_TYPE_STATE_ACK){
 		if(wait_ack != 1){
@@ -409,76 +447,41 @@ void ydle::send(Frame_t *frame)
 #endif
 	// From now, we are ready to transmit the frame
 
-	if(!rx_active){
+	while(rx_active){
 		// Wait that the current transmission finish
-		delay(250);
+		delay(2*YDLE_TPER);
+#ifdef _YDLE_DEBUG
+		Serial.println("The ligne is occuped");
+#endif
 	}
-	// So, stop the interruption while sending
-	Timer1.stop();
-	
- 	// Sequence de bits pour réglages de l'AGC
- 	for (i=0; i<32; i++)
- 	{
- 		digitalWrite(pinTx, HIGH);
- 		delayMicroseconds(YDLE_TPER);     // un bit é l'état haut
- 		digitalWrite(pinTx, LOW);
- 		delayMicroseconds(YDLE_TPER);     // un bit é l'état bas
-	}
-	
- 	// Octet de start annoncant le départ du signal au recepteur 	
-	for (i = 7; i>=0; i--)
+	memset((void*)&frameToSend, 0x0, 40);
+	// add crc BYTE
+	frame->taille++;
+	// calcul crc
+	frame->crc = computeCrc(frame);
+
+	uint8_t index =0;
+
+	frameToSendLength =7+frame->taille;
+	frameToSend[index++] = 0xFF;
+	frameToSend[index++] = 0xFF;
+	frameToSend[index++] = 0xFF;
+	frameToSend[index++] = 0xFF;
+	frameToSend[index++] = start_bit2;
+	frameToSend[index++] = frame->receptor;
+	frameToSend[index++] = frame->sender;
+	frameToSend[index++] = (frame->type << 5)+ frame->taille;
+	for (int j=0; j<frame->taille-1;j++)
 	{
-		digitalWrite(pinTx, (start_bit2 & 1<<i)); 
-		delayMicroseconds(YDLE_TPER); 
-		digitalWrite(pinTx, !(start_bit2 & 1<<i));
-		delayMicroseconds(YDLE_TPER);
- 	}
+		frameToSend[index++] = frame->data[j];
+	}
+	frameToSend[index++] = frame->crc;
 
-	for(i = 7; i>=0; i--){
-		digitalWrite(pinTx, (frame->receptor & 1<<i)); 
-		delayMicroseconds(YDLE_TPER);
-		digitalWrite(pinTx, !(frame->receptor & 1<<i));
-		delayMicroseconds(YDLE_TPER);
-	}
-	for(i = 7; i>=0; i--){
-		digitalWrite(pinTx, (frame->sender & 1<<i));
-		delayMicroseconds(YDLE_TPER);
-		digitalWrite(pinTx, !(frame->sender & 1<<i));
-		delayMicroseconds(YDLE_TPER);
-	}
-	for(i = 2; i>=0; i--){
-		digitalWrite(pinTx, (frame->type & 1<<i));
-		delayMicroseconds(YDLE_TPER);
-		digitalWrite(pinTx, !(frame->type & 1<<i));
-		delayMicroseconds(YDLE_TPER);
-	}	
-	for(i = 4; i>=0; i--){
-		digitalWrite(pinTx, (frame->taille & 1<<i));
-		delayMicroseconds(YDLE_TPER);
-		digitalWrite(pinTx, !(frame->taille & 1<<i));
-		delayMicroseconds(YDLE_TPER);
-	}
-	for(i=0;i<frame->taille-1;i++){
-		for(j = 7; j>=0; j--){
-			digitalWrite(pinTx, (frame->data[i] & 1<<j)); 
-			delayMicroseconds(YDLE_TPER);
-			digitalWrite(pinTx, !(frame->data[i] & 1<<j));
-			delayMicroseconds(YDLE_TPER);
-		}
-	}
-	for(i = 7; i>=0; i--){
-		digitalWrite(pinTx, (frame->crc & 1<<i));
-		delayMicroseconds(YDLE_TPER);
-		digitalWrite(pinTx, !(frame->crc & 1<<i));
-		delayMicroseconds(YDLE_TPER);
-	}
+	tx_index = 0;
+	tx_bit = 7;
 
-	digitalWrite(pinTx, LOW);
-	digitalWrite(pinLed, LOW);
-	digitalWrite(5, HIGH);
-	// Restart the timer task
-	Timer1.initialize(128);
-	Timer1.attachInterrupt(timerInterrupt);
+	digitalWrite(5, LOW);
+	transmission_on = true;
 }
 
 // Comparaison du signal reçu et du signal de référence
@@ -593,12 +596,12 @@ void pll()
 					parite = 0;
 					taille = 0;
 					memset(m_data,0,sizeof(m_data));
-					t_start = micros();
+					//t_start = micros();
 					return;
 				}
 			}
 
-			// On vérifie si l'on a reéu tout le message
+			// On vérifie si l'on a reçu tout le message
 			if ((bit_count-48) >= (rx_bytes_count*16) && (length_ok == 1))
 			{
 #ifdef _YDLE_DEBUG
@@ -755,7 +758,6 @@ int ydle::extractData(Frame_t *frame, int index, int &itype, long &ivalue)
 			case YDLE_DATA_DEGREEC:  
 			case YDLE_DATA_DEGREEF : 
 			case YDLE_DATA_PERCENT : 
-			case YDLE_DATA_HUMIDITY: 
 				if(*ptr&0x8)
 					bifValueisNegativ=true;
 				ivalue=*ptr&0x0F<<8;
@@ -769,7 +771,8 @@ int ydle::extractData(Frame_t *frame, int index, int &itype, long &ivalue)
 
 			// 12 bits no signed
 			case YDLE_DATA_DISTANCE: 
-			case YDLE_DATA_PRESSION: 
+			case YDLE_DATA_PRESSION:
+			case YDLE_DATA_HUMIDITY:
 				ivalue=(*ptr&0x0F)<<8;
 				ptr++;
 				ivalue+=*ptr;
@@ -863,25 +866,28 @@ void ydle::addData(Frame_t *frame, int data){
 	++current_index;
 	frame->taille = current_index;
 }
+
 // ----------------------------------------------------------------------------
 /**
 	   Function: addData
 	   Inputs:  int type type of data
-				long data
+				float data
 
 	   Outputs: 
 
 */
 // ----------------------------------------------------------------------------
-void ydle::addData(Frame_t * frame, int type, long data)
+void ydle::addData(Frame_t * frame, int type, float fdata)
 {
 	int oldindex = frame->taille;
-
+	int data;
 	switch (type){
 		// 4 bits no signed
-		case YDLE_DATA_STATE :    
+		case YDLE_DATA_STATE :
+
 			if (frame->taille < 29)
 			{
+				data=(int)fdata;
 				frame->taille++;
 				frame->data[oldindex]=type<<4;
 				frame->data[oldindex]+=data&0x0f;
@@ -893,12 +899,12 @@ void ydle::addData(Frame_t * frame, int type, long data)
 		break;	
 
 		// 12 bits signed
-		case YDLE_DATA_DEGREEC:  
+		case YDLE_DATA_DEGREEC:
 		case YDLE_DATA_DEGREEF : 
 		case YDLE_DATA_PERCENT : 
-		case YDLE_DATA_HUMIDITY: 
 			if (frame->taille < 28)
 			{
+				data=(int)(fdata*20);
 				frame->taille += 2;
 				frame->data[oldindex]=type<<4;
 				if (data <0)
@@ -916,8 +922,19 @@ void ydle::addData(Frame_t * frame, int type, long data)
 		break;	
 
 		// 12 bits no signed
+		case YDLE_DATA_HUMIDITY:
 		case YDLE_DATA_DISTANCE: 
 		case YDLE_DATA_PRESSION: 
+			switch(type)
+			{
+			case YDLE_DATA_HUMIDITY:
+				data=(int)(fdata*40);
+				break;
+			case YDLE_DATA_DISTANCE:
+			case YDLE_DATA_PRESSION:
+				data=(int)fdata;
+				break;
+			}
 			if (frame->taille < 28)
 			{
 				frame->taille += 2;
@@ -932,7 +949,8 @@ void ydle::addData(Frame_t * frame, int type, long data)
 		break;	
 
 		// 20 bits no signed
-		case YDLE_DATA_WATT  :   
+		case YDLE_DATA_WATT  :
+			data=(int)(fdata);
 			if (frame->taille<27)
 			{
 				frame->taille+=3;
@@ -948,7 +966,6 @@ void ydle::addData(Frame_t * frame, int type, long data)
 		break;	
 	}
 }
-
 // Affiche les logs sur la console série
 void ydle::log(String msg)
 {
